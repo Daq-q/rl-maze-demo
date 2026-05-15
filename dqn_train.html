@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real DQN Training - Live Machine Learning</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: linear-gradient(135deg, #0a0015 0%, #1a0033 100%);
+            color: #fff;
+            overflow-x: hidden;
+            width: 100vw;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.5rem, 4vw, 3rem);
+            font-weight: 900;
+            background: linear-gradient(135deg, #00ffff, #ff00ff, #ffff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 400px;
+            gap: 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: rgba(0, 255, 255, 0.05);
+            border: 2px solid #00ffff;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .panel h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: #00ffff;
+            margin-bottom: 15px;
+        }
+
+        canvas {
+            border: 2px solid #00ffff;
+            border-radius: 8px;
+            background: #0a0a1a;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            color: #00ffff;
+            font-weight: 700;
+        }
+
+        .stat-value.good {
+            color: #00ff88;
+        }
+
+        .stat-value.bad {
+            color: #ff0088;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 15px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            border: 2px solid #00ffff;
+            background: transparent;
+            color: #00ffff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #00ffff;
+            color: #0a0015;
+            transform: translateY(-2px);
+        }
+
+        .btn.primary {
+            background: #00ffff;
+            color: #0a0015;
+        }
+
+        .btn.primary:hover:not(:disabled) {
+            background: #ff00ff;
+            border-color: #ff00ff;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .log {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            height: 250px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .log::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .log::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .log::-webkit-scrollbar-thumb {
+            background: #00ffff;
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            margin: 3px 0;
+            color: #aaa;
+        }
+
+        .log-entry.success {
+            color: #00ff88;
+        }
+
+        .log-entry.error {
+            color: #ff0088;
+        }
+
+        .chart {
+            width: 100%;
+            height: 200px;
+        }
+
+        @media (max-width: 1400px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .network-viz {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .epsilon-display {
+            text-align: center;
+            padding: 10px;
+            background: rgba(255, 0, 255, 0.1);
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .epsilon-label {
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        .epsilon-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            color: #ff00ff;
+            font-weight: 700;
+        }
+
+        .slider-control {
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+        }
+
+        .slider-control label {
+            display: block;
+            margin-bottom: 8px;
+            color: #00ffff;
+            font-weight: 700;
+        }
+
+        .slider-control input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #00ffff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        .slider-control input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #00ffff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            border: none;
+        }
+
+        .slider-value {
+            display: inline-block;
+            margin-left: 10px;
+            color: #ff00ff;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="title"> MACHINE LEARNING DEMO </h1>
+
+    <div class="container">
+        <!-- Maze Visualization -->
+        <div class="panel">
+            <h2>Maze Environment</h2>
+            <canvas id="mazeCanvas" width="400" height="400"></canvas>
+            <div class="epsilon-display">
+                <div class="epsilon-label">Exploration Rate (Epsilon)</div>
+                <div class="epsilon-value" id="epsilonValue">100%</div>
+            </div>
+        </div>
+
+        <!-- Training Stats -->
+        <div class="panel">
+            <h2>Training Metrics</h2>
+            <canvas id="rewardChart" class="chart"></canvas>
+            <canvas id="lossChart" class="chart"></canvas>
+            
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Episode</div>
+                    <div class="stat-value" id="episode">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Success Rate</div>
+                    <div class="stat-value good" id="successRate">0%</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Avg Reward</div>
+                    <div class="stat-value" id="avgReward">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Loss</div>
+                    <div class="stat-value bad" id="loss">0</div>
+                </div>
+            </div>
+
+            <div class="network-viz">
+                <div class="epsilon-label">Neural Network Architecture</div>
+                <div style="display: flex; justify-content: center; align-items: center; margin-top: 10px; gap: 5px; flex-wrap: wrap;">
+                    <div style="color: #888;">Input(100)</div>
+                    <span style="color: #00ffff;">→</span>
+                    <div style="color: #888;">Hidden(64)</div>
+                    <span style="color: #00ffff;">→</span>
+                    <div style="color: #888;">Hidden(64)</div>
+                    <span style="color: #00ffff;">→</span>
+                    <div style="color: #888;">Output(4)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="panel">
+            <h2>Controls</h2>
+            <div class="controls">
+                <button class="btn primary" id="startBtn">Start Training</button>
+                <button class="btn" id="pauseBtn" disabled>Pause</button>
+                <button class="btn" id="resetBtn">Reset All</button>
+                <button class="btn" id="testBtn" disabled>Test Agent</button>
+            </div>
+
+            <div class="slider-control">
+                <label>Episode Speed: <span class="slider-value" id="speedValue">Medium</span></label>
+                <input type="range" min="1" max="3" value="2" id="speedSlider">
+            </div>
+
+            <div class="slider-control">
+                <label>Epsilon Decay Rate: <span class="slider-value" id="decayValue">Normal</span></label>
+                <input type="range" min="1" max="3" value="2" id="decaySlider">
+            </div>
+
+            <h2 style="margin-top: 20px;">Training Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // Maze Environment
+        class MazeEnvironment {
+            constructor() {
+                this.size = 10;
+                this.grid = this.createMaze();
+                this.start = [0, 0];
+                this.goal = [9, 9];
+                this.reset();
+            }
+
+            createMaze() {
+                const maze = [
+                    [0, 0, 0, 0, 1, 0, 0, 1, 0, 1],
+                    [0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+                    [0, 0, 0, 1, 0, 0, 1, 1, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    [0, 1, 0, 0, 1, 0, 1, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 1, 0, 1, 0],
+                    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+                    [1, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+                ];
+                return maze;
+            }
+
+            reset() {
+                this.position = [...this.start];
+                return this.getState();
+            }
+
+            getState() {
+                const state = new Array(this.size * this.size).fill(0);
+                state[this.position[1] * this.size + this.position[0]] = 1;
+                return state;
+            }
+
+            step(action) {
+                const moves = [[0, -1], [0, 1], [-1, 0], [1, 0]]; // up, down, left, right
+                const [dx, dy] = moves[action];
+                const newX = this.position[0] + dx;
+                const newY = this.position[1] + dy;
+
+                let reward = -1;
+                let done = false;
+
+                // Check bounds and walls
+                if (newX >= 0 && newX < this.size && newY >= 0 && newY < this.size && 
+                    this.grid[newY][newX] === 0) {
+                    this.position = [newX, newY];
+                } else {
+                    reward = -10; // Hit wall
+                }
+
+                // Check goal
+                if (this.position[0] === this.goal[0] && this.position[1] === this.goal[1]) {
+                    reward = 100;
+                    done = true;
+                }
+
+                return {
+                    state: this.getState(),
+                    reward: reward,
+                    done: done
+                };
+            }
+        }
+
+        // DQN Agent with TensorFlow.js
+        class DQNAgent {
+            constructor(stateSize, actionSize) {
+                this.stateSize = stateSize;
+                this.actionSize = actionSize;
+                this.memory = [];
+                this.gamma = 0.95;
+                this.epsilon = 1.0;
+                this.epsilonMin = 0.01;
+                this.epsilonDecay = 0.995;
+                this.learningRate = 0.001;
+                this.batchSize = 32;
+                this.maxMemory = 2000;
+
+                this.model = this.buildModel();
+                this.targetModel = this.buildModel();
+                this.updateTargetModel();
+            }
+
+            buildModel() {
+                const model = tf.sequential();
+                model.add(tf.layers.dense({
+                    units: 64,
+                    activation: 'relu',
+                    inputShape: [this.stateSize]
+                }));
+                model.add(tf.layers.dense({
+                    units: 64,
+                    activation: 'relu'
+                }));
+                model.add(tf.layers.dense({
+                    units: this.actionSize,
+                    activation: 'linear'
+                }));
+                
+                model.compile({
+                    optimizer: tf.train.adam(this.learningRate),
+                    loss: 'meanSquaredError'
+                });
+
+                return model;
+            }
+
+            updateTargetModel() {
+                const weights = this.model.getWeights();
+                const weightCopies = weights.map(w => w.clone());
+                this.targetModel.setWeights(weightCopies);
+            }
+
+            remember(state, action, reward, nextState, done) {
+                this.memory.push({ state, action, reward, nextState, done });
+                if (this.memory.length > this.maxMemory) {
+                    this.memory.shift();
+                }
+            }
+
+            act(state) {
+                if (Math.random() < this.epsilon) {
+                    return Math.floor(Math.random() * this.actionSize);
+                }
+
+                const stateTensor = tf.tensor2d([state]);
+                const qValues = this.model.predict(stateTensor);
+                const action = qValues.argMax(-1).dataSync()[0];
+                
+                stateTensor.dispose();
+                qValues.dispose();
+                
+                return action;
+            }
+
+            async replay() {
+                if (this.memory.length < this.batchSize) {
+                    return 0;
+                }
+
+                const batch = this.sampleMemory(this.batchSize);
+                
+                const states = batch.map(e => e.state);
+                const nextStates = batch.map(e => e.nextState);
+
+                const stateTensor = tf.tensor2d(states);
+                const nextStateTensor = tf.tensor2d(nextStates);
+
+                const currentQs = this.model.predict(stateTensor);
+                const nextQs = this.targetModel.predict(nextStateTensor);
+
+                const currentQsArray = await currentQs.array();
+                const nextQsArray = await nextQs.array();
+
+                batch.forEach((exp, i) => {
+                    let target = exp.reward;
+                    if (!exp.done) {
+                        const maxNextQ = Math.max(...nextQsArray[i]);
+                        target = exp.reward + this.gamma * maxNextQ;
+                    }
+                    currentQsArray[i][exp.action] = target;
+                });
+
+                const targetTensor = tf.tensor2d(currentQsArray);
+                
+                const history = await this.model.fit(stateTensor, targetTensor, {
+                    epochs: 1,
+                    verbose: 0
+                });
+
+                const loss = history.history.loss[0];
+
+                // Cleanup tensors
+                stateTensor.dispose();
+                nextStateTensor.dispose();
+                currentQs.dispose();
+                nextQs.dispose();
+                targetTensor.dispose();
+
+                if (this.epsilon > this.epsilonMin) {
+                    this.epsilon *= this.epsilonDecay;
+                }
+
+                return loss;
+            }
+
+            setEpsilonDecay(rate) {
+                // 1=slow (0.998), 2=normal (0.995), 3=fast (0.99)
+                if (rate === 1) {
+                    this.epsilonDecay = 0.998;
+                } else if (rate === 2) {
+                    this.epsilonDecay = 0.995;
+                } else {
+                    this.epsilonDecay = 0.99;
+                }
+            }
+
+            sampleMemory(batchSize) {
+                const batch = [];
+                for (let i = 0; i < batchSize; i++) {
+                    const idx = Math.floor(Math.random() * this.memory.length);
+                    batch.push(this.memory[idx]);
+                }
+                return batch;
+            }
+        }
+
+        // Visualization
+        const mazeCanvas = document.getElementById('mazeCanvas');
+        const mazeCtx = mazeCanvas.getContext('2d');
+        const rewardChart = document.getElementById('rewardChart');
+        const rewardCtx = rewardChart.getContext('2d');
+        const lossChart = document.getElementById('lossChart');
+        const lossCtx = lossChart.getContext('2d');
+
+        const cellSize = mazeCanvas.width / 10;
+
+        // Training state
+        let env = new MazeEnvironment();
+        let agent = new DQNAgent(100, 4);
+        let isTraining = false;
+        let episode = 0;
+        let rewardHistory = [];
+        let lossHistory = [];
+        let successHistory = [];
+        let episodeSpeed = 2; // 1=slow, 2=medium, 3=fast
+        let epsilonDecayRate = 2; // 1=slow decay, 2=normal, 3=fast decay
+
+        function drawMaze() {
+            mazeCtx.fillStyle = '#0a0a1a';
+            mazeCtx.fillRect(0, 0, mazeCanvas.width, mazeCanvas.height);
+
+            // Draw grid
+            mazeCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            mazeCtx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                mazeCtx.beginPath();
+                mazeCtx.moveTo(i * cellSize, 0);
+                mazeCtx.lineTo(i * cellSize, mazeCanvas.height);
+                mazeCtx.stroke();
+                
+                mazeCtx.beginPath();
+                mazeCtx.moveTo(0, i * cellSize);
+                mazeCtx.lineTo(mazeCanvas.width, i * cellSize);
+                mazeCtx.stroke();
+            }
+
+            // Draw walls
+            for (let y = 0; y < 10; y++) {
+                for (let x = 0; x < 10; x++) {
+                    if (env.grid[y][x] === 1) {
+                        mazeCtx.fillStyle = '#333';
+                        mazeCtx.fillRect(x * cellSize + 2, y * cellSize + 2, cellSize - 4, cellSize - 4);
+                    }
+                }
+            }
+
+            // Draw goal
+            mazeCtx.fillStyle = '#ffff00';
+            mazeCtx.shadowBlur = 15;
+            mazeCtx.shadowColor = '#ffff00';
+            mazeCtx.beginPath();
+            mazeCtx.arc(
+                env.goal[0] * cellSize + cellSize / 2,
+                env.goal[1] * cellSize + cellSize / 2,
+                cellSize / 3,
+                0,
+                Math.PI * 2
+            );
+            mazeCtx.fill();
+            mazeCtx.shadowBlur = 0;
+
+            // Draw agent
+            mazeCtx.fillStyle = '#00ffff';
+            mazeCtx.shadowBlur = 15;
+            mazeCtx.shadowColor = '#00ffff';
+            mazeCtx.beginPath();
+            mazeCtx.arc(
+                env.position[0] * cellSize + cellSize / 2,
+                env.position[1] * cellSize + cellSize / 2,
+                cellSize / 3,
+                0,
+                Math.PI * 2
+            );
+            mazeCtx.fill();
+            mazeCtx.shadowBlur = 0;
+        }
+
+        function drawChart(canvas, ctx, data, color, label) {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (data.length < 2) return;
+
+            const maxVal = Math.max(...data, 1);
+            const minVal = Math.min(...data, -10);
+            const range = maxVal - minVal || 1;
+            const step = canvas.width / Math.max(data.length - 1, 1);
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            data.forEach((val, i) => {
+                const x = i * step;
+                const y = canvas.height - ((val - minVal) / range) * (canvas.height - 20) - 10;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = color;
+            ctx.font = '12px Rajdhani';
+            ctx.fillText(label, 10, 20);
+            ctx.fillText(`Current: ${data[data.length - 1].toFixed(2)}`, 10, 40);
+        }
+
+        function log(message, type = 'normal') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function trainEpisode() {
+            let state = env.reset();
+            let totalReward = 0;
+            let steps = 0;
+            let episodeLoss = 0;
+            let lossCount = 0;
+
+            // Speed settings: 1=render every 20 steps, 2=every 10, 3=every 5
+            const renderInterval = episodeSpeed === 1 ? 20 : (episodeSpeed === 2 ? 10 : 5);
+
+            for (let step = 0; step < 200; step++) {
+                const action = agent.act(state);
+                const { state: nextState, reward, done } = env.step(action);
+
+                agent.remember(state, action, reward, nextState, done);
+                
+                const loss = await agent.replay();
+                if (loss > 0) {
+                    episodeLoss += loss;
+                    lossCount++;
+                }
+
+                totalReward += reward;
+                steps++;
+                state = nextState;
+
+                if (step % renderInterval === 0) {
+                    drawMaze();
+                    if (episodeSpeed === 1) {
+                        await tf.nextFrame();
+                    }
+                }
+
+                if (done) {
+                    drawMaze();
+                    break;
+                }
+
+                if (episodeSpeed === 1) {
+                    await tf.nextFrame();
+                }
+            }
+
+            const avgLoss = lossCount > 0 ? episodeLoss / lossCount : 0;
+            return { totalReward, steps, done: env.position[0] === 9 && env.position[1] === 9, avgLoss };
+        }
+
+        async function train() {
+            while (isTraining) {
+                episode++;
+                
+                const { totalReward, steps, done, avgLoss } = await trainEpisode();
+
+                rewardHistory.push(totalReward);
+                lossHistory.push(avgLoss);
+                successHistory.push(done ? 1 : 0);
+
+                if (rewardHistory.length > 100) {
+                    rewardHistory.shift();
+                    lossHistory.shift();
+                    successHistory.shift();
+                }
+
+                // Update target network every 10 episodes
+                if (episode % 10 === 0) {
+                    agent.updateTargetModel();
+                }
+
+                // Update UI
+                document.getElementById('episode').textContent = episode;
+                document.getElementById('avgReward').textContent = totalReward.toFixed(1);
+                document.getElementById('loss').textContent = avgLoss.toFixed(4);
+                document.getElementById('epsilonValue').textContent = (agent.epsilon * 100).toFixed(1) + '%';
+
+                const recentSuccess = successHistory.slice(-50);
+                const successRate = recentSuccess.length > 0 
+                    ? (recentSuccess.filter(x => x).length / recentSuccess.length * 100).toFixed(0)
+                    : 0;
+                document.getElementById('successRate').textContent = successRate + '%';
+
+                drawChart(rewardChart, rewardCtx, rewardHistory, '#00ffff', 'Reward per Episode');
+                drawChart(lossChart, lossCtx, lossHistory, '#ff00ff', 'Training Loss');
+
+                if (episode % 10 === 0) {
+                    log(`Episode ${episode}: Reward=${totalReward.toFixed(1)}, Steps=${steps}, Success=${done}, ε=${(agent.epsilon * 100).toFixed(1)}%`, done ? 'success' : 'normal');
+                }
+
+                await tf.nextFrame();
+            }
+        }
+
+        // Button handlers
+        document.getElementById('startBtn').addEventListener('click', () => {
+            isTraining = true;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('testBtn').disabled = true;
+            log('Training started!', 'success');
+            train();
+        });
+
+        document.getElementById('pauseBtn').addEventListener('click', () => {
+            isTraining = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('testBtn').disabled = false;
+            log('Training paused', 'normal');
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            isTraining = false;
+            episode = 0;
+            rewardHistory = [];
+            lossHistory = [];
+            successHistory = [];
+            
+            // Properly dispose old models
+            agent.model.dispose();
+            agent.targetModel.dispose();
+            
+            env = new MazeEnvironment();
+            agent = new DQNAgent(100, 4);
+            
+            document.getElementById('episode').textContent = '0';
+            document.getElementById('avgReward').textContent = '0';
+            document.getElementById('loss').textContent = '0';
+            document.getElementById('successRate').textContent = '0%';
+            document.getElementById('epsilonValue').textContent = '100%';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('testBtn').disabled = true;
+            
+            drawMaze();
+            log('Reset complete', 'success');
+        });
+
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            log('Testing trained agent...', 'normal');
+            const oldEpsilon = agent.epsilon;
+            agent.epsilon = 0; // Pure exploitation
+            
+            let state = env.reset();
+            let totalReward = 0;
+            let steps = 0;
+
+            for (let step = 0; step < 200; step++) {
+                const action = agent.act(state);
+                const { state: nextState, reward, done } = env.step(action);
+                
+                totalReward += reward;
+                steps++;
+                state = nextState;
+
+                drawMaze();
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                if (done) {
+                    log(`Test complete: ${steps} steps, reward=${totalReward}`, 'success');
+                    break;
+                }
+            }
+
+            if (steps === 200) {
+                log(`Test timeout: agent didn't reach goal`, 'error');
+            }
+
+            agent.epsilon = oldEpsilon;
+        });
+
+        // Initial draw
+        drawMaze();
+        log('System initialized. TensorFlow.js loaded successfully!', 'success');
+        log('Click "Start Training" to begin real ML training!', 'normal');
+
+        // Speed slider
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            episodeSpeed = parseInt(e.target.value);
+            const speedText = episodeSpeed === 1 ? 'Slow' : (episodeSpeed === 2 ? 'Medium' : 'Fast');
+            document.getElementById('speedValue').textContent = speedText;
+            log(`Speed changed to: ${speedText}`, 'normal');
+        });
+
+        // Epsilon decay slider
+        document.getElementById('decaySlider').addEventListener('input', (e) => {
+            epsilonDecayRate = parseInt(e.target.value);
+            const decayText = epsilonDecayRate === 1 ? 'Slow' : (epsilonDecayRate === 2 ? 'Normal' : 'Fast');
+            document.getElementById('decayValue').textContent = decayText;
+            agent.setEpsilonDecay(epsilonDecayRate);
+            log(`Epsilon decay changed to: ${decayText}`, 'normal');
+        });
+    </script>
+</body>
+</html>
